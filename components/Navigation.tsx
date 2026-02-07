@@ -21,9 +21,15 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, setView }) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern);
   };
 
+  const isAICoach = currentView === 'ai_coach';
+
   return (
-    <nav className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-[95vw] sm:max-w-fit overflow-x-auto no-scrollbar">
-      <div className="bg-[#0A0A0A]/90 backdrop-blur-3xl border border-white/10 px-2 py-2 rounded-full flex gap-1 shadow-2xl min-w-max">
+    <nav className={`fixed left-1/2 transform -translate-x-1/2 z-[60] w-full max-w-[95vw] sm:max-w-fit overflow-x-auto no-scrollbar transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${
+      isAICoach ? 'top-8' : 'bottom-8'
+    }`}>
+      <div className={`bg-[#0A0A0A]/90 backdrop-blur-3xl border border-white/10 px-2 py-2 rounded-full flex gap-1 shadow-2xl min-w-max transition-all duration-700 ${
+        isAICoach ? 'bg-zinc-900/40 border-white/5' : ''
+      }`}>
         {navItems.map((item) => {
           const isActive = currentView === item.id;
           const Icon = item.icon;

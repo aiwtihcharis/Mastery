@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Play, Activity, CheckCircle, ArrowRight, Brain, 
-  ChevronRight, Code2, User, Bell, Shield, Trash2, X 
+  ChevronRight, Code2, User, Bell, Shield, Trash2, X, Send
 } from 'lucide-react';
 import { 
   signInAnonymously, 
@@ -26,6 +26,7 @@ import LoadingScreen from './components/LoadingScreen';
 import Navigation from './components/Navigation';
 import HoverBeamCard from './components/HoverBeamCard';
 import PhaseModal from './components/PhaseModal';
+import Footer from './components/Footer';
 
 // --- View Components ---
 
@@ -33,7 +34,7 @@ const DashboardView: React.FC<{ phases: Phase[], userStats: UserStats, setView: 
   const activePhase = phases.find(p => (p.progress || 0) < 100) || phases[phases.length - 1];
 
   return (
-    <div className="space-y-6 pb-32 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8">
         <div>
           <h1 className="text-5xl font-medium text-white tracking-tight font-['Inter_Tight'] mb-3">Workspace</h1>
@@ -69,7 +70,7 @@ const DashboardView: React.FC<{ phases: Phase[], userStats: UserStats, setView: 
         </HoverBeamCard>
         
         {/* Quick AI Access */}
-        <HoverBeamCard className="p-8 h-full flex flex-col justify-between" onClick={() => setView('ai_coach')}>
+        <HoverBeamCard className="p-8 h-full flex flex-col justify-between cursor-pointer" onClick={() => setView('ai_coach')}>
           <div>
              <div className="flex items-center gap-2 mb-6">
               <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">
@@ -88,12 +89,12 @@ const DashboardView: React.FC<{ phases: Phase[], userStats: UserStats, setView: 
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <HoverBeamCard className="p-8" onClick={() => setView('metrics')}>
+        <HoverBeamCard className="p-8 cursor-pointer" onClick={() => setView('metrics')}>
           <Activity size={20} className="text-zinc-500 mb-6" />
           <div className="text-3xl font-bold text-white mb-1">{userStats.velocity}%</div>
           <div className="text-[10px] text-zinc-600 uppercase tracking-widest">Global Velocity</div>
         </HoverBeamCard>
-        <HoverBeamCard className="p-8" onClick={() => setView('progress')}>
+        <HoverBeamCard className="p-8 cursor-pointer" onClick={() => setView('progress')}>
           <CheckCircle size={20} className="text-emerald-500 mb-6" />
           <div className="text-3xl font-bold text-white mb-1">{userStats.completedCount}</div>
           <div className="text-[10px] text-zinc-600 uppercase tracking-widest">Tasks Finalized</div>
@@ -112,7 +113,7 @@ const DashboardView: React.FC<{ phases: Phase[], userStats: UserStats, setView: 
 
 const RoadmapView: React.FC<{ phases: Phase[], onPhaseClick: (p: Phase) => void }> = ({ phases, onPhaseClick }) => {
   return (
-    <div className="pb-32 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-medium text-white font-['Inter_Tight']">Modules</h2>
         <p className="text-zinc-500 font-['Bricolage_Grotesque']">Select a module to view details.</p>
@@ -151,7 +152,7 @@ const RoadmapView: React.FC<{ phases: Phase[], onPhaseClick: (p: Phase) => void 
 
 const MetricsView: React.FC<{ userStats: UserStats, completedTasks: string[] }> = ({ userStats, completedTasks }) => {
   return (
-    <div className="pb-32 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-medium text-white font-['Inter_Tight']">Metrics</h2>
         <p className="text-zinc-500 font-['Bricolage_Grotesque']">Analysis of your engineering performance.</p>
@@ -205,73 +206,114 @@ const MetricsView: React.FC<{ userStats: UserStats, completedTasks: string[] }> 
 };
 
 const AICoachView: React.FC<{ phases: Phase[], userStats: UserStats }> = ({ phases, userStats }) => {
+  const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [history, setHistory] = useState<{ type: 'ai' | 'user'; text: string }[]>([
-    { type: 'ai', text: "Hello, Architect. I've analyzed your progress. You're moving quickly through Phase 1 but have paused on DOM Manipulation. How can I assist?" }
+    { type: 'ai', text: "Systems online. I'm your Engineering Lead. Ask me anything about your current trajectory or a specific technical hurdle." }
   ]);
 
   const triggerHaptic = (pattern = 10) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern);
   };
 
-  const askAI = async (topic: string) => {
-    setIsTyping(true);
-    triggerHaptic(10);
-    const userMsg = { type: 'user' as const, text: topic };
-    setHistory(prev => [...prev, userMsg]);
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [history, isTyping]);
 
-    const prompt = `User asks about "${topic}". They have completed ${userStats.completedCount} tasks. Give short, specific technical advice.`;
-    const res = await getAICoachingResponse(prompt, "You are a senior mentor.", userStats);
-    
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!input.trim() || isTyping) return;
+
+    const userMsg = input;
+    setInput("");
+    setHistory(prev => [...prev, { type: 'user', text: userMsg }]);
+    setIsTyping(true);
+    triggerHaptic(5);
+
+    const systemPrompt = "You are a senior technical mentor. Keep responses concise, elite, and highly technical yet encouraging. Focus on software architecture and professional JS patterns.";
+    const response = await getAICoachingResponse(userMsg, systemPrompt, userStats);
+
     setIsTyping(false);
-    setHistory(prev => [...prev, { type: 'ai', text: res }]);
+    setHistory(prev => [...prev, { type: 'ai', text: response }]);
+    triggerHaptic(10);
   };
 
   return (
-    <div className="pb-32 space-y-6 h-[80vh] flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-700">
-       <div className="flex-none">
-          <h2 className="text-3xl font-medium text-white font-['Inter_Tight']">AI Architect</h2>
-          <p className="text-zinc-500 font-['Bricolage_Grotesque']">Your personal engineering mentor.</p>
-       </div>
+    <div className="fixed inset-0 pt-32 pb-24 md:pb-28 flex flex-col items-center bg-black animate-in fade-in duration-1000 z-40">
+      {/* Conversation Area */}
+      <div 
+        ref={scrollRef}
+        className="flex-1 w-full max-w-3xl overflow-y-auto px-6 space-y-10 custom-scrollbar scroll-smooth"
+      >
+        {history.map((msg, i) => (
+          <div 
+            key={i} 
+            className={`flex animate-in fade-in slide-in-from-bottom-2 duration-500 ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}
+          >
+            <div className={`max-w-[85%] text-lg md:text-xl font-['Bricolage_Grotesque'] leading-relaxed tracking-tight ${
+              msg.type === 'user' ? 'text-zinc-200 text-right' : 'text-zinc-400'
+            }`}>
+              {msg.type === 'ai' && <div className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                <Brain size={12} /> Architect
+              </div>}
+              {msg.text}
+            </div>
+          </div>
+        ))}
+        {isTyping && (
+          <div className="flex justify-start items-center gap-2 text-emerald-500/50">
+            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '0ms' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '150ms' }} />
+            <div className="w-1.5 h-1.5 rounded-full bg-current animate-bounce" style={{ animationDelay: '300ms' }} />
+          </div>
+        )}
+      </div>
 
-       <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
-          {history.map((msg, i) => (
-             <div key={i} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] p-6 rounded-3xl text-sm leading-relaxed ${msg.type === 'user' ? 'bg-zinc-800 text-white' : 'bg-zinc-900/50 border border-white/10 text-zinc-300'}`}>
-                   {msg.type === 'ai' && <Brain size={16} className="text-emerald-400 mb-2" />}
-                   {msg.text}
-                </div>
-             </div>
-          ))}
-          {isTyping && (
-             <div className="flex justify-start">
-               <div className="bg-zinc-900/50 border border-white/10 p-6 rounded-3xl flex items-center gap-2">
-                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce" />
-                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce delay-100" />
-                 <span className="w-2 h-2 bg-emerald-500 rounded-full animate-bounce delay-200" />
-               </div>
-             </div>
-          )}
-       </div>
-
-       <div className="flex-none grid grid-cols-2 gap-3">
-          {['Explain current phase', 'Debug help', 'Career advice', 'Code review'].map(topic => (
-            <button 
-              key={topic}
-              onClick={() => askAI(topic)}
-              className="p-4 bg-zinc-900 border border-white/5 rounded-2xl text-sm text-zinc-400 hover:text-white hover:border-emerald-500/30 transition-all text-left"
-            >
-              {topic}
-            </button>
-          ))}
-       </div>
+      {/* Minimalist Input Bar */}
+      <div className="w-full max-w-3xl px-6 py-4">
+        <form 
+          onSubmit={handleSubmit}
+          className="relative group"
+        >
+          <input 
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type a technical query..."
+            className="w-full bg-zinc-900/40 border border-white/5 rounded-3xl py-5 pl-8 pr-16 text-white placeholder-zinc-600 focus:outline-none focus:border-emerald-500/30 transition-all duration-500 text-lg font-['Bricolage_Grotesque']"
+          />
+          <button 
+            type="submit"
+            disabled={!input.trim() || isTyping}
+            className={`absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-500 ${
+              input.trim() ? 'bg-white text-black scale-100' : 'bg-zinc-800 text-zinc-500 scale-90 opacity-50'
+            }`}
+          >
+            <Send size={18} />
+          </button>
+        </form>
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+           {['Optimizing V8', 'React Server Components', 'Career Growth'].map(tag => (
+             <button 
+               key={tag}
+               onClick={() => { setInput(tag); }}
+               className="px-3 py-1.5 rounded-full border border-white/5 bg-zinc-900/20 text-zinc-500 text-xs hover:text-white hover:border-emerald-500/20 transition-all duration-300"
+             >
+               {tag}
+             </button>
+           ))}
+        </div>
+      </div>
     </div>
   );
 };
 
 const ProgressView: React.FC<{ phases: Phase[], completedTasks: string[] }> = ({ phases, completedTasks }) => {
   return (
-    <div className="pb-32 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-medium text-white font-['Inter_Tight']">Progress Log</h2>
         <p className="text-zinc-500 font-['Bricolage_Grotesque']">Detailed timeline of your achievements.</p>
@@ -310,7 +352,7 @@ const ProgressView: React.FC<{ phases: Phase[], completedTasks: string[] }> = ({
 
 const SettingsView: React.FC<{ user: FirebaseUser | null }> = ({ user }) => {
   return (
-    <div className="pb-32 space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700">
       <div className="flex flex-col gap-2">
         <h2 className="text-3xl font-medium text-white font-['Inter_Tight']">Settings</h2>
         <p className="text-zinc-500 font-['Bricolage_Grotesque']">Manage your preferences and data.</p>
@@ -379,7 +421,6 @@ export default function App() {
     if (!auth) return;
     const initAuth = async () => {
       try {
-        // Simple auth for demo
         await signInAnonymously(auth);
       } catch (e) {
         console.error("Auth error", e);
@@ -459,15 +500,18 @@ export default function App() {
     setTimeout(() => {
       setView(view);
       setIsTransitioning(false);
-    }, 300);
+    }, 400);
   };
 
-  return (
-    <div className="min-h-screen bg-black text-white font-['Bricolage_Grotesque'] selection:bg-emerald-500 selection:text-black">
-      {loading && <LoadingScreen onComplete={() => setLoading(false)} />}
+  const isAICoachActive = currentView === 'ai_coach';
 
-      <div className={`transition-all duration-1000 ${loading ? 'opacity-0 scale-95 blur-xl' : 'opacity-100 scale-100 blur-0'}`}>
-        <header className="fixed top-0 w-full z-40 h-24 flex items-center justify-between px-6 md:px-12 bg-gradient-to-b from-black to-transparent pointer-events-none">
+  return (
+    <div className={`min-h-screen bg-black text-white font-['Bricolage_Grotesque'] selection:bg-emerald-500 selection:text-black overflow-x-hidden ${isAICoachActive ? 'h-screen overflow-hidden' : ''} flex flex-col`}>
+      {loading && <LoadingScreen onComplete={() => setLoading(false)} />}
+      
+      {/* Header - Fixed & Outside Transform */}
+      {!isAICoachActive && (
+        <header className={`fixed top-0 w-full z-40 h-24 flex items-center justify-between px-6 md:px-12 bg-gradient-to-b from-black to-transparent pointer-events-none transition-opacity duration-700 ${loading ? 'opacity-0' : 'opacity-100'}`}>
            <div className="flex items-center gap-3 pointer-events-auto cursor-pointer" onClick={() => handleSetView('dashboard')}>
              <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center text-black font-bold font-['Inter_Tight'] shadow-2xl shadow-white/20">M</div>
              <span className="font-['Inter_Tight'] font-medium text-xl tracking-tight uppercase">Mastery</span>
@@ -476,8 +520,20 @@ export default function App() {
              <img src={`https://api.dicebear.com/7.x/shapes/svg?seed=${user?.uid || 'guest'}`} alt="User" className="w-full h-full rounded-full opacity-80" />
            </div>
         </header>
+      )}
 
-        <main className="relative z-10 pt-40 px-6 md:px-12 max-w-7xl mx-auto min-h-screen transition-all duration-300" style={{ opacity: isTransitioning ? 0 : 1, transform: isTransitioning ? 'scale(0.98)' : 'scale(1)' }}>
+      {/* Navigation - Fixed & Outside Transform */}
+      <div className={`transition-opacity duration-700 ${loading ? 'opacity-0' : 'opacity-100'}`}>
+         <Navigation currentView={currentView} setView={handleSetView} />
+      </div>
+
+      {/* Main Content - Scaled/Transformed */}
+      <div className={`flex-1 flex flex-col transition-all duration-1000 ${loading ? 'opacity-0 scale-95 blur-xl' : 'opacity-100 scale-100 blur-0'}`}>
+        <main 
+          className={`flex-1 relative z-10 transition-all duration-500 ease-out ${
+            isAICoachActive ? 'pt-0' : 'pt-40 px-6 md:px-12 max-w-7xl mx-auto w-full'
+          }`}
+        >
           {currentView === 'dashboard' && <DashboardView phases={phases} userStats={userStats} setView={handleSetView} setSelectedPhase={setSelectedPhase} />}
           {currentView === 'roadmap' && <RoadmapView phases={phases} onPhaseClick={setSelectedPhase} />}
           {currentView === 'metrics' && <MetricsView userStats={userStats} completedTasks={completedTasks} />}
@@ -485,10 +541,12 @@ export default function App() {
           {currentView === 'progress' && <ProgressView phases={phases} completedTasks={completedTasks} />}
           {currentView === 'settings' && <SettingsView user={user} />}
         </main>
-
-        <Navigation currentView={currentView} setView={handleSetView} />
         
-        {selectedPhase && (
+        {!isAICoachActive && <Footer />}
+      </div>
+
+      {/* Modal - Fixed & Outside Transform */}
+      {selectedPhase && !isAICoachActive && (
           <PhaseModal 
             phase={selectedPhase} 
             completedTasks={completedTasks}
@@ -496,7 +554,15 @@ export default function App() {
             onClose={() => setSelectedPhase(null)} 
           />
         )}
-      </div>
+        
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      `}</style>
     </div>
   );
 }

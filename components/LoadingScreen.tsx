@@ -13,15 +13,10 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ onComplete }) => {
     // Check for GSAP availability
     // @ts-ignore
     if (!window.gsap) {
-      console.warn("GSAP not loaded");
-      // Load it dynamically if missing (fallback mechanism from snippet)
       const script = document.createElement('script');
       script.src = "https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js";
       script.onload = () => { if(!didAnimate.current) startAnimation(); };
       document.head.appendChild(script);
-      // Fallback timeout in case script fails
-      setTimeout(onComplete, 2000);
-      return;
     } else if (!didAnimate.current) {
         startAnimation();
     }
