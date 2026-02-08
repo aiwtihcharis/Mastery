@@ -33,30 +33,32 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ onComplete }) => {
         onComplete: onComplete
       });
 
+      // Total Duration Goal: ~5 seconds
       tl.set(containerRef.current, { autoAlpha: 1 })
         .fromTo(chars, 
-          { opacity: 0, y: 50, filter: "blur(20px)" },
+          { opacity: 0, y: 100, filter: "blur(20px)" },
           { 
             opacity: 1, 
             y: 0, 
             filter: "blur(0px)", 
             stagger: 0.1, 
-            duration: 1.2, 
+            duration: 2.0, // Slow, elegant entry
             ease: "power4.out" 
           }
         )
+        // Hold state
         .to(chars, {
           opacity: 0,
-          y: -50,
+          y: -100,
           filter: "blur(20px)",
           stagger: 0.05,
-          duration: 0.8,
+          duration: 1.5, // Slow, elegant exit
           ease: "power4.in",
-          delay: 0.2
+          delay: 1.5 // Hold time
         })
         .to(containerRef.current, {
           autoAlpha: 0,
-          duration: 0.4
+          duration: 0.5
         });
     }
   }, [onComplete]);

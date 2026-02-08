@@ -3,7 +3,7 @@ import {
   Play, Activity, CheckCircle, ArrowRight, Brain, 
   ChevronRight, Code2, User, Bell, Shield, Trash2, X, Send,
   Moon, Sun, LogOut, Plus, Search, MessageSquare, Mic, Paperclip, File, XCircle, Camera,
-  PanelLeftClose, PanelLeftOpen, Terminal, Database, Globe, Cpu, Zap, Target, Lock, AlertTriangle, WifiOff
+  PanelLeftClose, PanelLeftOpen, Terminal, Database, Globe, Cpu, Zap, Target, Lock, AlertTriangle, WifiOff, Layout, History
 } from 'lucide-react';
 import { 
   signInAnonymously, 
@@ -325,6 +325,8 @@ const OnboardingView: React.FC<{ user: FirebaseUser, onComplete: () => void }> =
   );
 };
 
+// ... (Rest of components: DashboardView, etc. stay the same, they are pure presentation)
+
 const DashboardView: React.FC<{ phases: Phase[], userStats: UserStats, setView: (v: ViewType) => void, setSelectedPhase: (p: Phase) => void }> = ({ phases, userStats, setView, setSelectedPhase }) => {
   const activePhase = phases.find(p => (p.progress || 0) < 100) || phases[phases.length - 1];
 
@@ -406,6 +408,270 @@ const DashboardView: React.FC<{ phases: Phase[], userStats: UserStats, setView: 
   );
 };
 
+const AICoachView: React.FC<{ phases: Phase[], userStats: UserStats, user: FirebaseUser | null }> = ({ phases, userStats, user }) => {
+  const [input, setInput] = useState("");
+  const [history, setHistory] = useState<{ type: 'ai' | 'user'; text: string }[]>([]);
+  const [isTyping, setIsTyping] = useState(false);
+  const [files, setFiles] = useState<File[]>([]);
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [history, isTyping]);
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!input.trim() || isTyping) return;
+
+    const userMsg = input;
+    setInput("");
+    setHistory(prev => [...prev, { type: 'user', text: userMsg }]);
+    setIsTyping(true);
+
+    const activePhase = phases.find(p => p.id === userStats.activePhaseId) || phases[0];
+    const systemPrompt = `You are a Senior Principal Engineer acting as a mentor. The user is currently working on Phase ${activePhase.id}: ${activePhase.title} (${activePhase.focus}). Keep responses concise, elite, and highly technical yet encouraging.`;
+    
+    const response = await getAICoachingResponse(userMsg, systemPrompt, userStats);
+
+    setIsTyping(false);
+    setHistory(prev => [...prev, { type: 'ai', text: response }]);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const newFiles = Array.from(e.target.files).slice(0, 5);
+      setFiles(prev => [...prev, ...newFiles]);
+    }
+  };
+
+  const handleVoiceInput = () => {
+    if ('webkitSpeechRecognition' in window) {
+      // @ts-ignore
+      const recognition = new window.webkitSpeechRecognition();
+      recognition.onresult = (event: any) => {
+        setInput(event.results[0][0].transcript);
+      };
+      recognition.start();
+    } else {
+      alert("Voice input not supported.");
+    }
+  };
+
+  const userName = user?.displayName?.split(' ')[0] || "Engineer";
+
+  // Mock past chats - In a real app, this would come from Firestore
+  const allChats = [
+      "React Concurrent Mode Analysis", "V8 Garbage Collection", "System Design: Scale", 
+      "CSS Grid vs Flexbox", "Postgres Indexing Strategies", "Next.js 15 Middleware"
+  ];
+
+  const filteredChats = allChats.filter(c => c.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  return (
+    <div className="fixed inset-0 bg-white dark:bg-black text-zinc-900 dark:text-white z-50 flex overflow-hidden">
+      
+      {/* Sidebar (Collapsible) */}
+      <div className={`
+        relative h-full bg-zinc-50 dark:bg-[#0A0A0A] border-r border-zinc-200 dark:border-white/5 
+        transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] flex flex-col z-50
+        ${isSidebarOpen ? 'w-80 translate-x-0' : 'w-0 -translate-x-full md:w-0 md:translate-x-0 opacity-0 md:opacity-100'}
+        ${!isSidebarOpen && 'overflow-hidden'}
+      `}>
+        <div className="p-6 flex flex-col h-full min-w-[320px]">
+             {/* Header */}
+             <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-2 text-zinc-500 font-bold tracking-widest text-xs uppercase">
+                    <Database size={14} /> Neural Archives
+                </div>
+             </div>
+
+             {/* New Chat & Search */}
+             <div className="space-y-4 mb-8">
+                 <button 
+                    onClick={() => { setHistory([]); setInput(""); }}
+                    className="w-full py-4 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-xl font-bold flex items-center justify-center gap-2 hover:opacity-90 transition-opacity"
+                 >
+                    <Plus size={18} /> New Session
+                 </button>
+                 
+                 <div className="relative group">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-400 group-focus-within:text-emerald-500 transition-colors" />
+                    <input 
+                        type="text" 
+                        placeholder="Search logs..." 
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                        className="w-full bg-zinc-200 dark:bg-zinc-900 rounded-xl py-3 pl-10 pr-4 text-sm outline-none border border-transparent focus:border-emerald-500/50 transition-all placeholder-zinc-500 font-['Bricolage_Grotesque']"
+                    />
+                 </div>
+             </div>
+
+             {/* History List */}
+             <div className="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-1">
+                 <div className="text-xs font-bold text-zinc-400 uppercase tracking-widest mb-3 px-2">Past Sessions</div>
+                 {filteredChats.map((chat, i) => (
+                     <div key={i} className="group p-3 rounded-lg hover:bg-zinc-200 dark:hover:bg-zinc-900 cursor-pointer transition-colors">
+                        <div className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 truncate font-['Bricolage_Grotesque']">{chat}</div>
+                        <div className="text-[10px] text-zinc-400 mt-1">Today, 2:34 PM</div>
+                     </div>
+                 ))}
+             </div>
+        </div>
+      </div>
+
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col relative h-full w-full bg-white dark:bg-black">
+         
+         {/* Top Bar for Sidebar Toggle */}
+         <div className="absolute top-6 left-6 z-40">
+            <button 
+                onClick={() => setSidebarOpen(!isSidebarOpen)}
+                className="p-2 bg-zinc-100 dark:bg-zinc-900 rounded-lg text-zinc-500 hover:text-white border border-transparent hover:border-white/10 transition-all"
+            >
+                {isSidebarOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
+            </button>
+         </div>
+
+         {/* Chat Area */}
+         <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 md:px-32 pt-32 pb-48 flex flex-col custom-scrollbar">
+            {history.length === 0 ? (
+                <div className="flex-1 flex flex-col justify-center items-center text-center opacity-0 animate-in fade-in slide-in-from-bottom-8 duration-1000 fill-mode-forwards pb-20">
+                     <h1 className="text-6xl md:text-8xl font-['Inter_Tight'] font-medium tracking-tighter mb-6 text-zinc-900 dark:text-white">
+                        Hey, <span className="text-zinc-400 dark:text-zinc-600 font-serif italic">{userName}.</span>
+                     </h1>
+                     <p className="text-xl md:text-2xl text-zinc-500 font-['Bricolage_Grotesque'] max-w-lg">
+                        What engineering challenge shall we dismantle today?
+                     </p>
+                </div>
+            ) : (
+                <div className="space-y-10 max-w-4xl mx-auto w-full">
+                    {history.map((msg, i) => (
+                        <div key={i} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2 duration-500`}>
+                            <div className={`max-w-[85%] p-6 rounded-3xl shadow-sm ${msg.type === 'user' ? 'bg-zinc-100 dark:bg-zinc-900 text-zinc-900 dark:text-white border border-transparent' : 'text-zinc-700 dark:text-zinc-300'}`}>
+                                {msg.type === 'ai' && (
+                                    <div className="text-[10px] font-bold text-emerald-600 dark:text-emerald-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <Brain size={12} /> Architect
+                                    </div>
+                                )}
+                                <p className="text-lg md:text-xl font-['Bricolage_Grotesque'] leading-relaxed whitespace-pre-wrap">
+                                    {msg.text}
+                                </p>
+                            </div>
+                        </div>
+                    ))}
+                    {isTyping && (
+                         <div className="flex items-center gap-2 text-emerald-500 pl-6 animate-pulse">
+                            <Brain size={16} />
+                            <span className="text-xs font-bold uppercase tracking-widest">Processing</span>
+                         </div>
+                    )}
+                </div>
+            )}
+         </div>
+
+         {/* Distinct Input Bar */}
+         <div className="absolute bottom-8 left-0 right-0 px-6 z-40">
+            <div className="max-w-3xl mx-auto">
+                 {files.length > 0 && (
+                    <div className="flex gap-2 mb-4 overflow-x-auto pb-2 px-2 no-scrollbar">
+                        {files.map((f, i) => (
+                            <div key={i} className="flex items-center gap-2 bg-zinc-100 dark:bg-zinc-800 px-3 py-1.5 rounded-full text-xs text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-white/10 shrink-0 animate-in zoom-in duration-300">
+                                <File size={12} />
+                                <span className="max-w-[100px] truncate">{f.name}</span>
+                                <button onClick={() => setFiles(files.filter((_, idx) => idx !== i))}><XCircle size={12} /></button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="relative group">
+                    <div className="absolute -inset-1 bg-gradient-to-r from-emerald-500/20 via-blue-500/20 to-purple-500/20 rounded-[2.5rem] blur-md opacity-40 group-hover:opacity-60 transition-opacity duration-700" />
+                    <div className="relative bg-white/80 dark:bg-[#121212]/90 backdrop-blur-xl rounded-[2.5rem] shadow-2xl flex items-center p-2 pl-8 border border-zinc-200 dark:border-white/10 focus-within:border-emerald-500/30 transition-all duration-500">
+                        <input
+                            type="text"
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            placeholder="Ask me anything..."
+                            className="flex-1 bg-transparent border-none outline-none text-lg text-zinc-900 dark:text-white placeholder-zinc-400 h-16 font-['Bricolage_Grotesque']"
+                        />
+                         <div className="flex items-center gap-2 pr-2">
+                            <label className="p-3 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-full cursor-pointer text-zinc-400 hover:text-emerald-500 transition-colors">
+                                <Paperclip size={20} />
+                                <input type="file" multiple className="hidden" onChange={handleFileUpload} />
+                            </label>
+                            
+                            <button 
+                                type="button" 
+                                onClick={handleVoiceInput}
+                                className="p-3 hover:bg-zinc-100 dark:hover:bg-white/10 rounded-full cursor-pointer text-zinc-400 hover:text-emerald-500 transition-colors"
+                            >
+                                <Mic size={20} />
+                            </button>
+
+                            <button 
+                                type="submit"
+                                disabled={!input.trim()}
+                                className="w-14 h-14 bg-zinc-900 dark:bg-white text-white dark:text-black rounded-full flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed hover:scale-105 transition-all shadow-lg"
+                            >
+                                <ArrowRight size={22} />
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                <div className="text-center mt-4 text-[10px] uppercase tracking-widest text-zinc-500 font-bold">
+                    AI Architect v2.0 • Specialized in JS Engineering
+                </div>
+            </div>
+         </div>
+      </div>
+    </div>
+  );
+};
+
+const RoadmapView: React.FC<{ phases: Phase[], onPhaseClick: (p: Phase) => void }> = ({ phases, onPhaseClick }) => {
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col gap-2">
+        <h2 className="text-3xl font-medium text-zinc-900 dark:text-white font-['Inter_Tight']">Modules</h2>
+        <p className="text-zinc-500 font-['Bricolage_Grotesque']">Select a module to view details.</p>
+      </div>
+      <div className="space-y-4">
+        {phases.map((phase) => (
+          <HoverBeamCard key={phase.id} className="p-1 cursor-pointer" onClick={() => onPhaseClick(phase)}>
+            <div className="bg-white/50 dark:bg-[#050505]/80 backdrop-blur-sm rounded-[1.8rem] p-6 md:p-8 flex flex-col md:flex-row gap-6 md:items-center">
+              <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-xl font-bold shadow-lg ${phase.progress === 100 ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20' : 'bg-zinc-100 dark:bg-zinc-900 border border-black/5 dark:border-white/5 text-zinc-500'}`}>
+                {phase.id}
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-1">
+                  <h3 className="text-xl font-bold text-zinc-900 dark:text-white font-['Instrument_Sans']">{phase.title}</h3>
+                  {(phase.progress || 0) > 0 && (phase.progress || 0) < 100 && (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-widest bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">Active</span>
+                  )}
+                  {phase.progress === 100 && <CheckCircle size={16} className="text-emerald-500" />}
+                </div>
+                <p className="text-zinc-500 text-sm font-['Bricolage_Grotesque'] max-w-xl">{phase.project.desc}</p>
+              </div>
+              <div className="flex items-center gap-6">
+                 <div className="text-right hidden md:block">
+                   <div className="text-zinc-900 dark:text-white font-mono text-lg">{phase.tasks.length}</div>
+                   <div className="text-[10px] text-zinc-600 uppercase tracking-widest">Tasks</div>
+                 </div>
+                 <div className="w-10 h-10 rounded-full border border-black/5 dark:border-white/10 flex items-center justify-center text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white group-hover:border-white/20 transition-colors"><ChevronRight size={18} /></div>
+              </div>
+            </div>
+          </HoverBeamCard>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const MetricsView: React.FC<{ userStats: UserStats, completedTasks: string[] }> = ({ userStats, completedTasks }) => {
   return (
     <div className="space-y-8">
@@ -482,132 +748,7 @@ const ProgressView: React.FC<{ phases: Phase[], completedTasks: string[] }> = ({
   );
 };
 
-const RoadmapView: React.FC<{ phases: Phase[], onPhaseClick: (p: Phase) => void }> = ({ phases, onPhaseClick }) => {
-  return (
-    <div className="space-y-8">
-      <div className="flex flex-col gap-2">
-        <h2 className="text-3xl font-medium text-zinc-900 dark:text-white font-['Inter_Tight']">Curriculum Roadmap</h2>
-        <p className="text-zinc-500 font-['Bricolage_Grotesque']">Your path to engineering mastery.</p>
-      </div>
-      
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {phases.map((phase) => (
-           <HoverBeamCard key={phase.id} className="p-8 cursor-pointer group" onClick={() => onPhaseClick(phase)}>
-              <div className="flex justify-between items-start mb-6">
-                 <div className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center font-bold text-zinc-500 group-hover:text-white group-hover:bg-emerald-500 transition-colors">
-                    {phase.id}
-                 </div>
-                 <div className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${phase.progress === 100 ? 'bg-emerald-500/10 text-emerald-500' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'}`}>
-                    {phase.progress === 100 ? 'Completed' : `${phase.progress || 0}% Done`}
-                 </div>
-              </div>
-              <h3 className="text-2xl font-bold text-zinc-900 dark:text-white mb-2">{phase.title}</h3>
-              <p className="text-zinc-500 text-sm mb-6 h-10 line-clamp-2">{phase.project.desc}</p>
-              
-              <div className="space-y-3">
-                 <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <Code2 size={14} /> <span>{phase.focus}</span>
-                 </div>
-                 <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <CheckCircle size={14} /> <span>{phase.tasks.length} Core Tasks</span>
-                 </div>
-              </div>
-           </HoverBeamCard>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const AICoachView: React.FC<{ phases: Phase[], userStats: UserStats, user: FirebaseUser | null }> = ({ phases, userStats, user }) => {
-  const [messages, setMessages] = useState<{role: 'user' | 'ai', text: string}[]>([
-      { role: 'ai', text: "Systems online. I am your engineering lead. What technical challenge are we solving today?" }
-  ]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(scrollToBottom, [messages]);
-
-  const handleSend = async () => {
-    if (!input.trim()) return;
-    
-    const userMsg = input;
-    setInput("");
-    setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setLoading(true);
-
-    try {
-        const activePhase = phases.find(p => p.id === userStats.activePhaseId) || phases[0];
-        const systemContext = `You are a Senior Principal Engineer acting as a mentor. The user is currently working on Phase ${activePhase.id}: ${activePhase.title} (${activePhase.focus}).`;
-        
-        const response = await getAICoachingResponse(userMsg, systemContext, userStats);
-        
-        setMessages(prev => [...prev, { role: 'ai', text: response }]);
-    } catch (error) {
-        setMessages(prev => [...prev, { role: 'ai', text: "Connection interrupted. Please retry." }]);
-    } finally {
-        setLoading(false);
-    }
-  };
-
-  return (
-    <div className="flex flex-col h-screen pt-24 pb-8 px-4 md:px-0 max-w-4xl mx-auto">
-       <div className="flex-1 overflow-y-auto space-y-6 pr-4 custom-scrollbar pb-4">
-          {messages.map((msg, idx) => (
-             <div key={idx} className={`flex gap-4 ${msg.role === 'user' ? 'flex-row-reverse' : ''} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${msg.role === 'ai' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-zinc-800 text-white'}`}>
-                   {msg.role === 'ai' ? <Brain size={16} /> : <User size={16} />}
-                </div>
-                <div className={`p-4 rounded-2xl max-w-[85%] text-sm md:text-base leading-relaxed font-['Bricolage_Grotesque'] shadow-lg ${msg.role === 'ai' ? 'bg-zinc-900/80 border border-white/5 text-zinc-300' : 'bg-white text-black font-medium'}`}>
-                   {msg.text}
-                </div>
-             </div>
-          ))}
-          {loading && (
-             <div className="flex gap-4 animate-pulse">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center shrink-0 text-emerald-500">
-                   <Activity size={16} />
-                </div>
-                <div className="p-4 rounded-2xl bg-zinc-900/50 border border-white/5 text-zinc-500 text-xs flex items-center gap-2">
-                   Analyzing architecture...
-                </div>
-             </div>
-          )}
-          <div ref={messagesEndRef} />
-       </div>
-       
-       <div className="mt-4 pt-4 border-t border-white/5">
-          <div className="relative group">
-             <div className="absolute -inset-0.5 bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-xl opacity-20 group-hover:opacity-40 transition duration-500 blur"></div>
-             <input 
-               value={input}
-               onChange={(e) => setInput(e.target.value)}
-               onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-               placeholder="Ask about architecture, code patterns, or career growth..."
-               className="relative w-full bg-black border border-white/10 rounded-xl pl-6 pr-14 py-4 text-white placeholder-zinc-600 focus:border-emerald-500/50 outline-none transition-all font-['Bricolage_Grotesque']"
-             />
-             <button 
-               onClick={handleSend}
-               disabled={loading || !input.trim()}
-               className="absolute right-2 top-2 p-2.5 bg-white text-black rounded-lg hover:bg-zinc-200 disabled:opacity-50 disabled:bg-zinc-800 disabled:text-zinc-500 transition-colors"
-             >
-               <Send size={18} />
-             </button>
-          </div>
-          <div className="text-center mt-3 text-[10px] text-zinc-600 uppercase tracking-widest font-bold">
-            Powered by Gemini 3 Flash • Confidential Engineering Data
-          </div>
-       </div>
-    </div>
-  );
-};
-
-const SettingsView: React.FC<{ user: FirebaseUser | null, theme: Theme, toggleTheme: () => void, customAvatar: string | null }> = ({ user, theme, toggleTheme, customAvatar }) => {
+const SettingsView: React.FC<{ user: FirebaseUser | null, theme: Theme, toggleTheme: () => void, customAvatar: string | null, setCustomAvatar: (url: string) => void }> = ({ user, theme, toggleTheme, customAvatar, setCustomAvatar }) => {
   const [name, setName] = useState(user?.displayName || "");
   const [msg, setMsg] = useState("");
 
@@ -633,6 +774,9 @@ const SettingsView: React.FC<{ user: FirebaseUser | null, theme: Theme, toggleTh
       reader.onloadend = async () => {
           try {
              const base64 = reader.result as string;
+             // Immediate UI update via prop
+             setCustomAvatar(base64);
+             
              // Local Update
              const currentLocal = getLocalProfile(user.uid) || {};
              saveLocalProfile(user.uid, { ...currentLocal, avatar: base64 });
@@ -754,6 +898,11 @@ export default function App() {
   const [customAvatar, setCustomAvatar] = useState<string | null>(null);
   const [isOfflineMode, setIsOfflineMode] = useState(false);
 
+  // New states for orchestrated loading
+  const [loadingAnimationDone, setLoadingAnimationDone] = useState(false);
+  const [authCheckDone, setAuthCheckDone] = useState(false);
+  const [pendingRoute, setPendingRoute] = useState<AppMode>('auth'); // Default to auth if nothing else
+
   // Theme Handling
   useEffect(() => {
     if (theme === 'dark') {
@@ -770,37 +919,59 @@ export default function App() {
     if (!auth) return;
     return onAuthStateChanged(auth, async (u) => {
        setUser(u);
-       if (!u) {
-         setAppMode(prev => prev === 'loading' ? 'auth' : 'auth'); 
-       } else {
-         // Load initial local data to prevent flicker
-         const localProfile = getLocalProfile(u.uid);
-         if (localProfile?.onboardingComplete) setAppMode('app');
-         else if (!localProfile) setAppMode('onboarding');
+       
+       // Default target
+       let target: AppMode = 'auth';
 
+       if (u) {
+         // User exists, determine if onboarding is needed
+         let isOnboardingComplete = false;
+
+         // 1. Check Local Storage (Fast)
+         const localProfile = getLocalProfile(u.uid);
+         if (localProfile?.onboardingComplete) {
+            isOnboardingComplete = true;
+         }
+
+         // 2. Check Firestore (Robust, if online)
          if (db) {
-            const profileRef = getUserProfileRef(u.uid);
             try {
+              const profileRef = getUserProfileRef(u.uid);
               const snap = await getDoc(profileRef);
               if (snap.exists() && snap.data().onboardingComplete) {
-                  setAppMode('app');
-                  saveLocalProfile(u.uid, snap.data()); // Cache for next time
+                  isOnboardingComplete = true;
+                  // Sync local
+                  saveLocalProfile(u.uid, snap.data());
               } else if (!snap.exists()) {
-                  setAppMode('onboarding');
+                  // Profile doesn't exist, likely new user or partial signup
+                  isOnboardingComplete = false;
               }
             } catch (e: any) {
-              console.warn("Profile fetch failed (Permissions/Network):", e);
+              console.warn("Profile fetch failed, using local decision:", e);
               setIsOfflineMode(true);
-              // Fallback based on local data
-              if (localProfile && localProfile.onboardingComplete) setAppMode('app');
-              else setAppMode('onboarding');
             }
-         } else {
-             setAppMode('app'); 
          }
+
+         target = isOnboardingComplete ? 'app' : 'onboarding';
+       }
+
+       // If we are currently in loading state, just store the decision
+       if (appMode === 'loading') {
+          setPendingRoute(target);
+          setAuthCheckDone(true);
+       } else {
+          // If we are already running (e.g. logout), switch immediately
+          setAppMode(target);
        }
     });
-  }, []);
+  }, [appMode]); 
+
+  // Transition Logic: ONLY when both Animation AND Auth are ready
+  useEffect(() => {
+    if (appMode === 'loading' && loadingAnimationDone && authCheckDone) {
+      setAppMode(pendingRoute);
+    }
+  }, [loadingAnimationDone, authCheckDone, pendingRoute, appMode]);
 
   // Sync Data (Cloud + Local)
   useEffect(() => {
@@ -858,7 +1029,6 @@ export default function App() {
       },
       (error) => {
         console.warn("Firestore Profile Sync Error (Permissions/Offline):", error);
-        // We don't set offline mode here to avoid overwriting progress state, just warn
       }
     );
 
@@ -866,7 +1036,7 @@ export default function App() {
         unsubProgress();
         unsubProfile();
     }
-  }, [user]); // Removed completedTasks dependency to prevent loops
+  }, [user]); 
 
   const triggerHaptic = (pattern = 10) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern);
@@ -876,14 +1046,12 @@ export default function App() {
     triggerHaptic(15);
     if (!user) return;
 
-    // 1. Optimistic UI Update & Local Storage
     const isDone = completedTasks.includes(taskId);
     const newTasks = isDone ? completedTasks.filter(id => id !== taskId) : [...completedTasks, taskId];
     
     setCompletedTasks(newTasks);
     saveLocalProgress(user.uid, newTasks);
 
-    // Update derived phases state instantly for UI responsiveness
     setPhases(CURRICULUM.map(phase => {
         const phaseTaskIds = phase.tasks.map(t => t.id);
         const doneCount = phaseTaskIds.filter(id => newTasks.includes(id)).length;
@@ -892,7 +1060,6 @@ export default function App() {
 
     if (isOfflineMode || !db) return;
 
-    // 2. Try Cloud Update
     try {
       await setDoc(getUserProgressRef(user.uid), { 
         completedTasks: isDone ? arrayRemove(taskId) : arrayUnion(taskId),
@@ -920,13 +1087,11 @@ export default function App() {
     setTimeout(() => {
       setView(view);
       setIsTransitioning(false);
-    }, 500); // Wait for transition
+    }, 600); 
   };
 
   const handleLoadingComplete = () => {
-     if (!user) {
-        setAppMode('auth');
-     }
+     setLoadingAnimationDone(true);
   };
 
   const isAICoachActive = currentView === 'ai_coach';
@@ -974,7 +1139,7 @@ export default function App() {
             </div>
 
             {/* Main Content - Scaled/Transformed */}
-            <div className={`flex-1 flex flex-col transition-all duration-500 ${isTransitioning ? 'blur-md opacity-0 scale-[0.98]' : 'blur-0 opacity-100 scale-100'}`}>
+            <div className={`flex-1 flex flex-col transition-all duration-[600ms] ${isTransitioning ? 'blur-md opacity-0 scale-[0.98]' : 'blur-0 opacity-100 scale-100'}`}>
                 <main 
                     className={`flex-1 relative z-10 transition-all duration-500 ease-out ${
                         isAICoachActive ? 'pt-0' : 'pt-40 px-6 md:px-12 max-w-7xl mx-auto w-full'
@@ -985,7 +1150,7 @@ export default function App() {
                 {currentView === 'metrics' && <MetricsView userStats={userStats} completedTasks={completedTasks} />}
                 {currentView === 'ai_coach' && <AICoachView phases={phases} userStats={userStats} user={user} />}
                 {currentView === 'progress' && <ProgressView phases={phases} completedTasks={completedTasks} />}
-                {currentView === 'settings' && <SettingsView user={user} theme={theme} toggleTheme={toggleTheme} customAvatar={customAvatar} />}
+                {currentView === 'settings' && <SettingsView user={user} theme={theme} toggleTheme={toggleTheme} customAvatar={customAvatar} setCustomAvatar={setCustomAvatar} />}
                 </main>
                 
                 {!isAICoachActive && <Footer />}
