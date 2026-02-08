@@ -5,6 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mastery - JS Engineering SaaS</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Instrument Sans', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600&family=Instrument+Sans:wght@400;500;600;700&family=Bricolage+Grotesque:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -24,6 +36,13 @@
       ::-webkit-scrollbar-thumb:hover {
         background: #10b981; 
       }
+      
+      /* Smooth theme transition */
+      body, div, nav, button, input {
+        transition-property: background-color, border-color, color, fill, stroke;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 300ms;
+      }
     </style>
   <script type="importmap">
 {
@@ -38,7 +57,7 @@
 }
 </script>
 </head>
-  <body class="bg-black text-white antialiased">
+  <body class="bg-white dark:bg-black text-zinc-900 dark:text-white antialiased transition-colors duration-300">
     <div id="root"></div>
   </body>
 </html>

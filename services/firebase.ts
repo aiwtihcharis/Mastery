@@ -1,27 +1,48 @@
 import { initializeApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { 
+  getAuth, 
+  GoogleAuthProvider, 
+  signInWithEmailAndPassword, 
+  createUserWithEmailAndPassword,
+  updateProfile,
+  User
+} from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
+import { getAnalytics } from 'firebase/analytics';
 
-// Note: In a real app, these would come from process.env
-// For this demo, we check if the global config exists from the user's snippet
-// or we fall back to a dummy config to prevent crashes (making the app purely frontend demo mode if no keys)
-
-const getFirebaseConfig = () => {
-  // @ts-ignore
-  if (typeof window !== 'undefined' && window.__firebase_config) {
-     // @ts-ignore
-    return JSON.parse(window.__firebase_config);
-  }
-  
-  // Return null if no config found, App will handle "Demo Mode"
-  return null;
+// Explicit configuration provided for Mastery App
+const firebaseConfig = {
+  apiKey: "AIzaSyD0D2zNYjakT-GAxatF38cbv6nVFAn09Ms",
+  authDomain: "mastery---learn-js-with-ai.firebaseapp.com",
+  projectId: "mastery---learn-js-with-ai",
+  storageBucket: "mastery---learn-js-with-ai.firebasestorage.app",
+  messagingSenderId: "230451829887",
+  appId: "1:230451829887:web:f2880d6bc066bd899a734a",
+  measurementId: "G-29QKL56EZ7"
 };
 
-const config = getFirebaseConfig();
+// Initialize Firebase
+export const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app);
 
-export const app = config ? initializeApp(config) : null;
-export const auth = app ? getAuth(app) : null;
-export const db = app ? getFirestore(app) : null;
+// Initialize analytics only in browser environment to prevent SSR issues
+export const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
+
 export const googleProvider = new GoogleAuthProvider();
 
 export const APP_ID = 'js-mastery-saas';
+
+// --- Auth Helpers ---
+
+export const loginEmail = async (email: string, pass: string) => {
+  return signInWithEmailAndPassword(auth, email, pass);
+};
+
+export const registerEmail = async (email: string, pass: string) => {
+  return createUserWithEmailAndPassword(auth, email, pass);
+};
+
+export const updateUser = async (user: User, name: string) => {
+  return updateProfile(user, { displayName: name });
+};

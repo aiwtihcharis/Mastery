@@ -5,9 +5,10 @@ import { ViewType } from '../types';
 interface NavigationProps {
   currentView: ViewType;
   setView: (view: ViewType) => void;
+  position?: 'bottom' | 'top';
 }
 
-const Navigation: React.FC<NavigationProps> = ({ currentView, setView }) => {
+const Navigation: React.FC<NavigationProps> = ({ currentView, setView, position = 'bottom' }) => {
   const navItems: { id: ViewType; icon: React.ElementType; label: string }[] = [
     { id: 'dashboard', icon: Layout, label: 'Dash' },
     { id: 'roadmap', icon: Layers, label: 'Modules' },
@@ -21,15 +22,11 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, setView }) => {
     if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern);
   };
 
-  const isAICoach = currentView === 'ai_coach';
-
   return (
     <nav className={`fixed left-1/2 transform -translate-x-1/2 z-[60] w-full max-w-[95vw] sm:max-w-fit overflow-x-auto no-scrollbar transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] ${
-      isAICoach ? 'top-8' : 'bottom-8'
+      position === 'top' ? 'top-6' : 'bottom-8'
     }`}>
-      <div className={`bg-[#0A0A0A]/90 backdrop-blur-3xl border border-white/10 px-2 py-2 rounded-full flex gap-1 shadow-2xl min-w-max transition-all duration-700 ${
-        isAICoach ? 'bg-zinc-900/40 border-white/5' : ''
-      }`}>
+      <div className="bg-[#0A0A0A]/90 dark:bg-[#0A0A0A]/90 bg-white/90 backdrop-blur-3xl border border-black/5 dark:border-white/10 px-2 py-2 rounded-full flex gap-1 shadow-2xl min-w-max transition-all duration-700">
         {navItems.map((item) => {
           const isActive = currentView === item.id;
           const Icon = item.icon;
@@ -38,10 +35,12 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, setView }) => {
               key={item.id}
               onClick={() => { triggerHaptic(15); setView(item.id); }}
               className={`relative flex items-center gap-2 px-4 md:px-6 py-3 rounded-full transition-all duration-500 font-['Bricolage_Grotesque'] whitespace-nowrap ${
-                isActive ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white hover:bg-white/5'
+                isActive 
+                  ? 'bg-zinc-800 text-white dark:bg-zinc-800 dark:text-white' 
+                  : 'text-zinc-500 hover:text-black dark:text-zinc-500 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'
               }`}
             >
-              <Icon size={18} className={isActive ? "text-emerald-400" : ""} />
+              <Icon size={18} className={isActive ? "text-emerald-500" : ""} />
               {isActive && <span className="text-sm font-semibold tracking-tight">{item.label}</span>}
             </button>
           );
